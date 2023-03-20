@@ -13,7 +13,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "    {\n        \"image\":\"ankita2503/compute:0.1\",\n        \"env_vars\":\"test\",\n        \"input_data\":\".txt\"\n    }",
+					"raw": "{\n  \"image\": \"ankita2503/compute-random-date:V0.1\",\n  \"env_vars\": {\n    \"env\": \"dev\"\n  },\n  \"input_data\": {\n    \"resultFolder\": \"computationResult\",\n    \"containerVolumePath\": \"/data\"\n  }\n}",
 					"options": {
 						"raw": {
 							"language": "json"

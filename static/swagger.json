@@ -1,156 +1,194 @@
 {
-  "openapi": "3.0.0",
+  "swagger": "2.0",
   "info": {
-    "title": "Simulation Switchboard APIs",
-    "contact": {},
-    "version": "1.0"
+    "version": "1.0",
+    "title": "Computation Simulation",
+    "contact": {}
   },
-  "servers": [
-    {
-      "url": "http://127.0.0.1:5000",
-      "variables": {}
-    }
+  "host": "127.0.0.1:5000",
+  "basePath": "/",
+  "securityDefinitions": {},
+  "schemes": [
+    "http"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
   ],
   "paths": {
     "/computation": {
       "post": {
+        "summary": "Endpoint which handles incoming computational requests by spawing a new docker container and storing the volume in storage location.",
         "tags": [
-          "Simulation Switchboard API EndPoints"
+          "Computation Request"
         ],
-        "summary": "Endpoint to handle incoming computational requests and spawn a new container based on the incoming request data and bind mount a storage volume",
         "operationId": "computation",
-        "parameters": [],
-        "requestBody": {
-          "description": "",
-          "content": {
-            "application/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/computationrequest"
-                  },
-                  {
-                    "example": {
-                      "image": "ankita2503/compute-random-date:V0.1",
-                      "env_vars": "test",
-                      "input_data": "ComputationResult"
-                    }
-                  }
-                ]
-              },
-              "example": {
-                "image": "ankita2503/compute-random-date:V0.1",
-                "env_vars": "test",
-                "input_data": "ComputationResult"
-              }
+        "deprecated": false,
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "Body",
+            "in": "body",
+            "required": true,
+            "description": "",
+            "schema": {
+              "$ref": "#/definitions/computationrequest"
             }
-          },
-          "required": true
-        },
+          }
+        ],
         "responses": {
           "200": {
-            "description": "SUCCESS",
+            "description": "",
             "headers": {}
           }
-        },
-        "deprecated": false
+        }
       }
     },
     "/containers": {
       "get": {
+        "summary": "endpoint to return the status of all running containers",
         "tags": [
-          "Simulation Switchboard API EndPoints"
+          "Container Status"
         ],
-        "summary": "Endpoint to monitor container status",
         "operationId": "containers",
+        "deprecated": false,
+        "produces": [
+          "application/json"
+        ],
         "parameters": [],
         "responses": {
           "200": {
             "description": "SUCCESS",
             "headers": {}
           }
-        },
-        "deprecated": false
+        }
       }
     },
     "/containers/{container_id}": {
       "delete": {
+        "summary": "Endpoint to stop and remove a container wuth given ID upon client request",
         "tags": [
-          "Simulation Switchboard API EndPoints"
+          "Stop and Remove container on request"
         ],
-        "summary": "Endpoint to DELETE the container with given ID",
         "operationId": "containersWithID",
+        "deprecated": false,
+        "produces": [
+          "application/json"
+        ],
         "parameters": [
-        {
-          "name": "container_id",
-          "in": "path",
-          "description": "CONTAINER_ID of the container to be deleted",
-          "required": true,
-          "schema": {
-            "type": "string"
+          {
+            "name": "container_id",
+            "in": "path",
+            "description": "container_id of the container to be deleted",
+            "required": true,
+            "schema":
+              {"type": "string"}
           }
-        }
-      ],
+        ],
         "responses": {
           "200": {
             "description": "SUCCESS",
             "headers": {}
           }
-        },
-        "deprecated": false
+        }
       }
     },
     "/health": {
       "get": {
+        "summary": "Health Check",
         "tags": [
-          "Simulation Switchboard API EndPoints"
+          "Health Check"
         ],
-        "summary": "Endpoint for Health Check of the application",
         "operationId": "Health",
+        "deprecated": false,
+        "produces": [
+          "application/json"
+        ],
         "parameters": [],
         "responses": {
           "200": {
             "description": "SUCCESS",
             "headers": {}
           }
-        },
-        "deprecated": false
-      }
-    }
-  },
-  "components": {
-    "schemas": {
-      "computationrequest": {
-        "title": "computationrequest",
-        "required": [
-          "image",
-          "env_vars",
-          "input_data"
-        ],
-        "type": "object",
-        "properties": {
-          "image": {
-            "type": "string"
-          },
-          "env_vars": {
-            "type": "string"
-          },
-          "input_data": {
-            "type": "string"
-          }
-        },
-        "example": {
-          "image": "ankita2503/compute-random-date:V0.1",
-          "env_vars": "dev",
-          "input_data": "ComputationResult"
         }
       }
     }
   },
+  "definitions": {
+    "computationrequest": {
+      "title": "computationrequest",
+      "example": {
+        "image": "ankita2503/compute-random-date:V0.1",
+        "env_vars": {
+          "env": "dev"
+        },
+        "input_data": {
+          "resultFolder": "computationResult",
+          "containerVolumePath": "/data"
+        }
+      },
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "string"
+        },
+        "env_vars": {
+          "$ref": "#/definitions/EnvVars"
+        },
+        "input_data": {
+          "$ref": "#/definitions/InputData"
+        }
+      },
+      "required": [
+        "image",
+        "env_vars",
+        "input_data"
+      ]
+    },
+    "EnvVars": {
+      "title": "EnvVars",
+      "example": {
+        "env": "dev"
+      },
+      "type": "object",
+      "properties": {
+        "env": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "env"
+      ]
+    },
+    "InputData": {
+      "title": "InputData",
+      "example": {
+        "resultFolder": "computationResult",
+        "containerVolumePath": "/data"
+      },
+      "type": "object",
+      "properties": {
+        "resultFolder": {
+          "type": "string"
+        },
+        "containerVolumePath": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resultFolder",
+        "containerVolumePath"
+      ]
+    }
+  },
   "tags": [
     {
-      "name": "Simulation Switchboard API EndPoints",
-      "description": ""
+      "name": "Simulation Switchboard API",
+      "description": "This API will handle the spawning and monitoring of Docker containers for incoming simulation jobs, allowing each job to be executed in its own container."
     }
   ]
 }

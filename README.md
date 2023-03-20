@@ -11,6 +11,23 @@ approach allows for better resource management and scaling of simulations.
 
 ## Run Locally
 
+### To create new env :
+
+#### Run following:
+
+```bash
+deactivate 
+
+python3 -m venv simEnv
+
+source simEnv/bin/activate
+
+pip install -U pip
+
+pip install -r requirements.txt
+```
+
+
 #### Clone the project
 
 ```bash
@@ -23,10 +40,10 @@ approach allows for better resource management and scaling of simulations.
   cd Simulation-Switchboard
 ```
 
-#### Install dependencies
+#### Install dependencies (Optional)
 
 ```bash
-  pip install requirements.txt
+  pip install -r requirements.txt
 ```
 
 #### Start the server
@@ -41,11 +58,18 @@ approach allows for better resource management and scaling of simulations.
   http://127.0.0.1:5000/swagger/
 ```
 
-#### Import Postman Collection and test APIs in postman
+#### Import Postman Collection and test APIs in postman (Optional)
 
 ```bash
   cd collection
   import Computation.postman_collection.json in Postman
+```
+
+#### prerequisite
+
+```bash
+  - Docker Daemon on the host
+  - python 
 ```
 ## API Reference
 
@@ -60,9 +84,16 @@ approach allows for better resource management and scaling of simulations.
 
 
         {
-            "image":"ankita2503/compute-random-date:V0.1",
-            "env_vars":"test",
-            "input_data":"ComputationResult"
+        "image": "ankita2503/compute-random-date:V0.1",
+        "env_vars": 
+        {
+            "env": "dev"
+        },
+        "input_data": 
+        {
+            "resultFolder": "computationResult",
+            "containerVolumePath": "/data"
+        }
         }
 
 #### Sample Response 
@@ -112,26 +143,17 @@ approach allows for better resource management and scaling of simulations.
             ]
         }
 
+#### 3. Endpoint to monitor application health
 
-
-## Appendix
-
-### To Deactivate the default venv and create new env :
-
-#### Run following:
-
-```bash
-deactivate 
-
-python3 -m venv simEnv
-
-source simEnv/bin/activate
-
-pip install -U pip
-
-pip install docker
-
-pip install flask
-
-pip freeze > requirements.txt
+```http
+  GET /health
 ```
+
+#### Sample Response 
+
+        Health Check OK : Application is running
+
+
+
+## Contributers
+- Ankita Singh

@@ -1,54 +1,119 @@
-import asyncio
+import threading
 import os
 import docker
-from flask import Flask, request, jsonify, send_from_directory
+import json
+import time
+from docker.errors import ImageNotFound, APIError
+from flask import Flask, request, jsonify
 from flask_swagger_ui import get_swaggerui_blueprint
+from werkzeug.exceptions import BadRequest
 
 app = Flask(__name__)
 
-@app.route('/static/<path:path>')
-def sendStatic(path):
-    return send_from_directory('static', path)
-
-
-SWAGGER_URL = '/swagger'
-API_URL = '/static/swagger.json'
-SWAGGERUI_BLUEPRINT = get_swaggerui_blueprint(
-    SWAGGER_URL,
-    API_URL,
+swagger_url = '/swagger'
+api_url = '/static/swagger.json'
+swaggerui_blueprint = get_swaggerui_blueprint(
+    swagger_url,
+    api_url,
     config={
         'app_name': "SwitchBoardSimulator"
     }
 )
-app.register_blueprint(SWAGGERUI_BLUEPRINT, url_prefix=SWAGGER_URL)
+app.register_blueprint(swaggerui_blueprint, url_prefix=swagger_url)
 
 
-def check_health():
+def remove_container_on_exit(container):
     """
-    This function is used to check the health of the application.
-    :return: A string message indicating the health of the application.
+    This function checks the container status and deletes the container once it has exited.
     """
-    return "Health Check OK : Application is running"
+    try:
+        while True:
+            container.reload()
+            container_state = container.attrs["State"]
+            print(container_state)
+
+            if (container_state["Status"] == "exited"):
+                container.remove()
+                break
+
+            time.sleep(10)
+
+    except Exception as e:
+        print(f'Error checking container status: {e}')
 
 
-async def checkContainerStatus(container):
+@app.route('/computation', methods=['POST'])
+def handle_computation_request():
     """
-    This function is used to test the status of the container.
-    If the container is exited, then the exit code is checked.
-    If the exit code is 0, then the computation is finished successfully.
-    If the exit code is not 0, then the computation is finished with error.
+    This function handles the computation request.
+    It creates a container and runs the image in it.
+    It also starts a thread to remove the container when the computation is done.
+    :return: A JSON response containing the status and container id.
     """
-    container.wait()
-    if container.status == 'exited':
-        exit_code = container.attrs['State']['ExitCode']
-        if exit_code == 0:
-            print("Computation finished successfully")
-        else:
-            print("Computation finished with error, exit code:", exit_code)
+    try:
+        # Get the JSON data from the request
+        data = request.get_json()
+        if not data:
+            return {'error': 'Invalid JSON data in the request.'}, 400
+        # Extract the necessary information from the data
+        image = data.get('image')
+        env_vars = data.get('env_vars')
+        input_data = data.get('input_data')
+        # Validate the data. If invalid, return an error response
+        if not all([image, env_vars, input_data]):
+            return {'error': 'Invalid request data.'}, 400
+        path_on_host = os.path.join(os.getcwd(), input_data['resultFolder'])
+        path_on_container = input_data['containerVolumePath']
+
+        # Check if input data exists
+        if not os.path.exists(path_on_host):
+            os.makedirs(path_on_host)
+
+        # Connect to the Docker daemon
+        client = docker.from_env()
+
+        # Check if the image exists
+        try:
+            # client.images.get(image)
+            client.images.pull(image)
+        except docker.errors.APIError:
+            return {'error': f'Image "{image}" not found.'}, 404
+
+        # Create a container and run the image in it
+        container = client.containers.run(
+            image,
+            detach=True,
+            environment=env_vars,
+            volumes={
+                path_on_host: {'bind': path_on_container, 'mode': 'rw'}
+            }
+        )
+        # create a variable to get the timestamp when container was started, This is the stop condition for Approach-2
+        timestamp = time.time()
+
+        # Stop and remove container when job is done
+
+        # Approach-1 : By using exit code
+        # call remove_container_on_exit with container name
+        # This function checks if container has finished is by using the exit code of the container.
+        # threading.Thread(target=remove_container_on_exit, args=(container,)).start()
+
+        # Approach-2 : By checking file writes in storage location
+        # call remove_container_on_completion
+        # This function checks when computation writes a specific file in the directory then assume the computation is finished and stop & remove the container.
+        threading.Thread(target=remove_container_on_completion, args=(container, path_on_host, timestamp)).start()
+
+        # Return the container id
+        return {'status': 'success', 'container_id': container.id}, 200
+    except BadRequest as e:
+        return {'error': f'Request JSON body decoding error: {e}.'}, 500
+    except APIError as e:
+        return {'error': f'Docker API error: {e}.'}, 500
+    except Exception as e:
+        return {'error': f'Unknown error: {e}.'}, 500
 
 
-
-async def testMountFile(container,path):
+def remove_container_on_completion(container, folder_path, timestamp):
     """
     This function is used to test if the file is created in the mounted directory.
     If the file is created, the container is stopped and removed.
@@ -66,55 +131,29 @@ async def testMountFile(container,path):
         This function does not return anything.
 
     """
-    while True:
-        if os.path.exists(path):
-            container.stop()
-            container.remove()
-            break
-
-
-@app.route('/computation', methods=['POST'])
-def handle_computation_request():
-    """
-    This function handles the computation request.
-    It creates a new container and runs the image in it. It also calls async function which checks the container status and deletes the container once the container has exited
-    It returns the container id.
-    """
-    print("inside handle_computation_request")
-    # Get the JSON data from the request
-    data = request.get_json()
-    # Extract the necessary information from the data
-    image = data['image']
-    env_vars = data['env_vars']
-    input_data = data['input_data']
-    # Validate the data. If invalid, return an error response
-    if not all([image, env_vars, input_data]):
-        return jsonify({'error': 'Invalid request data'}), 400
-    # If the data is valid, process the request
-    # ...
-    # Connect to the Docker daemon
-    client = docker.from_env()
-    path = os.path.join(os.getcwd(),input_data)
-    isExist = os.path.exists(path)
-    if not isExist:
-        os.makedirs(path)
-
-    container = client.containers.run(
-        image,
-        detach=True,
-        volumes={
-            path: {'bind': '/data', 'mode': 'rw'}
-        }
-    )
-    print(container.logs())
-    # checkContainerStatus(container)
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    # loop.run_until_complete(testMountFile(container,path))
-    loop.run_until_complete(checkContainerStatus(container))
-    loop.close()
-    # Return the container id
-    return jsonify({'status': 'success', 'container_id': container.id})
+    try:
+        while True:
+            container.reload()
+            container_state = container.attrs["State"]
+            print(container_state)
+            if (container_state["Status"] == "exited"):
+                container.remove()
+                break
+            # check if any file {result_timestamp} in folder path is created after the timestamp
+            # if not, wait for 1 second and check again
+            if not any(os.path.getmtime(os.path.join(folder_path, f)) > timestamp for f in os.listdir(folder_path)):
+                print("Waiting for file to be created...")
+                time.sleep(5)
+            else:
+                print("File created!")
+                container.stop()
+                container.remove()
+                print("Container stopped!")
+                break
+    except Exception as e:
+        print("exception", e)
+        # Raise an exception in case of an error
+        raise Exception(str(e))
 
 
 @app.route('/containers', methods=['GET'])
@@ -123,17 +162,20 @@ def get_containers_status():
         This function returns the status of all running containers.
         :return: A JSON object containing the status of all running containers.
     """
-    # Connect to the Docker daemon
-    client = docker.from_env()
-    # Get a list of all running containers
-    containers = client.containers.list(all=False)
-    # Create a list to store the container status
-    container_status = []
-    # Iterate through the containers and get their status
-    for container in containers:
-        container_status.append({'id': container.id, 'status': container.status})
-    # Return the container status
-    return jsonify({'containers': container_status})
+    try:
+        # Connect to the Docker daemon
+        client = docker.from_env()
+        # Get a list of all running containers
+        containers = client.containers.list(all=False)
+        # Create a list to store the container status
+        container_status = []
+        # Iterate through the containers and get their status
+        for container in containers:
+            container_status.append({'id': container.id, 'status': container.status})
+        # Return the container status
+        return jsonify({'containers': container_status})
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 
 @app.route('/containers/<container_id>', methods=['DELETE'])
@@ -151,18 +193,31 @@ def stop_container(container_id):
     json
         A JSON response indicating whether the operation was successful.
     """
-    # Connect to the Docker daemon
-    client = docker.from_env()
     try:
-        # Stop and remove the container
+        # Connect to the Docker daemon
+        client = docker.from_env()
+        # Get the container by ID
         container = client.containers.get(container_id)
+        # Stop and remove the container
         container.stop()
         container.remove()
         # Return a successful response
         return jsonify({'status': 'success'})
-    except Exception as e:
-        # Return an error response
+    except docker.errors.NotFound:
+        # Return a 404 error response if container is not found
+        return jsonify({'error': f'Container with ID {container_id} not found'}), 404
+    except docker.errors.APIError as e:
+        # Return a 500 error response if an API error occurs
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/health', methods=['GET'])
+def check_health():
+    """
+    This function is used to check the health of the application.
+    :return: A string message indicating the health of the application.
+    """
+    return "Health Check OK : Application is running"
 
 
 if (__name__ == '__main__'):
