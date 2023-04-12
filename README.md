@@ -1,8 +1,8 @@
 
 # Simulation Switchboard
 
-The task at hand is to develop the Danfoss Switchboard API that efficiently manages computational
-simulation resources in Danfoss. The API will handle the spawning and monitoring of Docker containers
+The project is to develop the APIs that efficiently manages computational
+simulation resources. The API will handle the spawning and monitoring of Docker containers
 for incoming simulation jobs, allowing each job to be executed in its own container. This containerised
 approach allows for better resource management and scaling of simulations.
 
